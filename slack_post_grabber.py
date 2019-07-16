@@ -14,10 +14,9 @@ from slack import WebClient
 # from slack.web.classes.blocks import *
 # from slack.web.classes.elements import *
 # from slack.web.classes.messages import Message
-from slack.web.classes.dialogs import DialogBuilder
-from slack.web.classes.dialog_elements import DialogTextArea
 from flask import Flask, Request
 from flask import request as current_request
+import requests
 
 
 slack_web_client = WebClient(token=os.environ['SLACK_BOT_OAUTH_TOKEN'])
@@ -85,49 +84,39 @@ def _split_upto_newline(source: str, maxlen: int) -> Tuple[str, str]:
     return source[:split_current], source[split_next:]
 
 
-def _show_source_dialog(trigger_id: str, source_text: str):
-    """Displays the source text in a Slack dialog.
+def _send_source_message(response_url: str, source: str) -> None:
+    """Sends an ephemeral message containing the source of a message or post.
 
-    If the source text is too long to fit inside a single textarea, it is split
-    into multiple textareas (up to 10). Any text beyond the last textarea is
-    truncated.
+    If the source string is too long to fit in a single message, it will be
+    split into up to 5 messages. Any remaining string after that is truncated.
 
     Args:
-        trigger_id:
-            Trigger ID retrieved from a Slack interaction request.
-        source_text:
-            Source text to show. Will be truncated to fit inside a textarea.
+        response_url: URL provided by a Slack interaction request.
+        source: Source text of a Slack message or post.
     """
-    TITLE = 'View message source'
-    source_dialog = DialogBuilder().callback_id('not_used').title(TITLE)
+    MAX_TEXT_LENGTH = 40000
 
-    # Note: DialogTextArea in slackclient v2.1.0 allows only up to
-    #       (max_value_length - 1) characters in the `value` field.
-    MAX_LENGTH = DialogTextArea.max_value_length - 1
-    MAX_ELEMENTS = DialogBuilder.elements_max_length
-
-    if len(source_text) <= MAX_LENGTH:
-        source_dialog.text_area(
-            name='Message source',
-            label='Message source',
-            value=source_text
-        )
+    boilerplate = 'Raw JSON of message:\n```{source}```'
+    boilerplate_length = len(boilerplate.format(source=''))
+    if len(source) <= MAX_TEXT_LENGTH - boilerplate_length:
+        text = boilerplate.format(source=source)
+        payload = {'text': text, 'response_type': 'ephemeral'}
+        requests.post(response_url, json=payload)
     else:
+        boilerplate = 'Raw JSON of message ({i} of {count}):\n```{source}```'
+        boilerplate_length = len(boilerplate.format(i=0, count=0, source=''))
         segments = []
-        while source_text and len(segments) < MAX_ELEMENTS:
-            segment, source_text = _split_upto_newline(source_text, MAX_LENGTH)
-            segments.append(segment)
-        for i, text in enumerate(segments):
-            source_dialog.text_area(
-                name=f'Message source ({i + 1} of {len(segments)})',
-                label=f'Message source ({i + 1} of {len(segments)})',
-                value=text
+        while source and len(segments) < 5:
+            segment, source = _split_upto_newline(
+                source, MAX_TEXT_LENGTH - boilerplate_length
             )
-
-    slack_web_client.dialog_open(
-        dialog=source_dialog.to_dict(),
-        trigger_id=trigger_id,
-    )
+            segments.append(segment)
+        for i, segment in enumerate(segments):
+            text = boilerplate.format(
+                i=i + 1, count=len(segments), source=segment
+            )
+            payload = {'text': text, 'response_type': 'ephemeral'}
+            requests.post(response_url, json=payload)
 
 
 def _is_slack_post(file_info: dict) -> bool:
@@ -171,14 +160,14 @@ def handle_slack_interaction(request: Request) -> Any:
 
     callback_id = payload['callback_id']
     original_message = payload['message']
-    trigger_id = payload['trigger_id']
+    response_url = payload['response_url']
 
     if callback_id == 'view_message_source':
         # Show the source of the message in a dialog
         message_source = json.dumps(
             original_message, indent=2, ensure_ascii=False
         )
-        _show_source_dialog(trigger_id, message_source)
+        _send_source_message(response_url, message_source)
     elif callback_id == 'view_post_source':
         # Show the source of the Slack post attached to the message
         attached_files = original_message.get('files', [])
@@ -196,13 +185,9 @@ def handle_slack_interaction(request: Request) -> Any:
                 post_source = json.dumps(
                     post_payload, indent=2, ensure_ascii=False
                 )
-            _show_source_dialog(trigger_id, post_source)
+            _send_source_message(response_url, post_source)
         else:
-            slack_web_client.chat_postEphemeral(
-                channel=payload['channel']['id'],
-                user=payload['user']['id'],
-                text='Error: This is not a Slack post.'
-            )
+            _send_source_message(response_url, 'Error: Not a Slack post')
     else:
         assert 0, f'Unexpected callback ID: {callback_id}'
 
