@@ -14,6 +14,7 @@ from slack import WebClient
 # from slack.web.classes.elements import *
 # from slack.web.classes.messages import Message
 from slack.web.classes.dialogs import DialogBuilder
+from slack.web.classes.dialog_elements import DialogTextArea
 from flask import Flask, Request
 from flask import request as current_request
 
@@ -55,22 +56,52 @@ def _is_valid_request(request: Request) -> bool:
 def _show_source_dialog(trigger_id: str, source_text: str):
     """Displays the source text in a Slack dialog.
 
+    If the source text is too long to fit inside a single textarea, it is split
+    into multiple textareas (up to 10). Any text beyond the last textarea is
+    truncated.
+
     Args:
         trigger_id:
             Trigger ID retrieved from a Slack interaction request.
         source_text:
             Source text to show. Will be truncated to fit inside a textarea.
     """
-    source_dialog = (
-        DialogBuilder()
-        .callback_id('not_used')
-        .title('Source of message')
-        .text_area(
+    TITLE = 'View message source'
+    source_dialog = DialogBuilder().callback_id('not_used').title(TITLE)
+
+    # Note: DialogTextArea in slackclient v2.1.0 allows only up to
+    #       (max_value_length - 1) characters in the `value` field.
+    MAX_LENGTH = DialogTextArea.max_value_length - 1
+    MAX_ELEMENTS = DialogBuilder.elements_max_length
+
+    if len(source_text) <= MAX_LENGTH:
+        source_dialog.text_area(
             name='Message source',
-            label='This does not affect the original message',
-            value=source_text[:2999]
+            label='Message source',
+            value=source_text
         )
-    )
+    else:
+        segments = []
+        while source_text and len(segments) < MAX_ELEMENTS:
+            split_current = split_next = min(len(source_text), MAX_LENGTH)
+            if len(source_text) > MAX_LENGTH:
+                last_newline_pos = source_text.rfind('\n', 0, MAX_LENGTH + 1)
+                # Split on the last newline before the MAX_LENGTH mark, unless
+                # this is the last segment
+                if last_newline_pos != -1 and len(segments) < MAX_ELEMENTS - 1:
+                    split_current = last_newline_pos
+                    split_next = last_newline_pos + 1
+            current_segment = source_text[:split_current]
+            source_text = source_text[split_next:]
+            segments.append(current_segment)
+
+        for i, text in enumerate(segments):
+            source_dialog.text_area(
+                name=f'Message source ({i + 1} of {len(segments)})',
+                label=f'Message source ({i + 1} of {len(segments)})',
+                value=text
+            )
+
     slack_web_client.dialog_open(
         dialog=source_dialog.to_dict(),
         trigger_id=trigger_id,
