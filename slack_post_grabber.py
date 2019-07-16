@@ -3,6 +3,7 @@
 import hmac
 import json
 import os
+import urllib
 from hashlib import sha256
 from http import HTTPStatus
 from sys import stderr
@@ -19,7 +20,7 @@ from flask import Flask, Request
 from flask import request as current_request
 
 
-slack_web_client = WebClient(token=os.environ['SLACK_OAUTH_TOKEN'])
+slack_web_client = WebClient(token=os.environ['SLACK_BOT_OAUTH_TOKEN'])
 
 
 # The following verification methods are based on:
@@ -141,11 +142,36 @@ def handle_slack_interaction(request: Request) -> Any:
     # slackclient v2.1.0 does not provide a convenience class for message
     # actions, so manually access the JSON fields
 
-    # Show the source of the message in a dialog
+    callback_id = payload['callback_id']
     original_message = payload['message']
     trigger_id = payload['trigger_id']
-    message_source = json.dumps(original_message, indent=2, ensure_ascii=False)
-    _show_source_dialog(trigger_id, message_source)
+
+    if callback_id == 'view_message_source':
+        # Show the source of the message in a dialog
+        message_source = json.dumps(original_message, indent=2, ensure_ascii=False)
+        _show_source_dialog(trigger_id, message_source)
+    elif callback_id == 'view_post_source':
+        # Show the source of the Slack post attached to the message
+        attached_files = original_message.get('files', [])
+        is_slack_post = lambda f: f['filetype'] == 'docs' or f['filetype'] == 'post'
+        slack_post = next(filter(is_slack_post, attached_files), None)
+        if slack_post:
+            TOKEN = os.environ['SLACK_OAUTH_TOKEN']
+            post_url = urllib.request.Request(
+                slack_post['url_private'],
+                headers={ 'Authorization': f'Bearer {TOKEN}' }
+            )
+            post_response = urllib.request.urlopen(post_url)
+            post_payload = json.loads(post_response.read())
+            _show_source_dialog(trigger_id, post_payload['full'])
+        else:
+            slack_web_client.chat_postEphemeral(
+                channel=payload['channel']['id'],
+                user=payload['user']['id'],
+                text='Error: This is not a Slack post.'
+            )
+    else:
+        assert 0, f'Unexpected callback ID: {callback_id}'
 
     return '', HTTPStatus.OK
 
