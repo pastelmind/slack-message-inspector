@@ -52,6 +52,31 @@ def _is_valid_request(request: Request) -> bool:
     return True
 
 
+def _show_source_dialog(trigger_id: str, source_text: str):
+    """Displays the source text in a Slack dialog.
+
+    Args:
+        trigger_id:
+            Trigger ID retrieved from a Slack interaction request.
+        source_text:
+            Source text to show. Will be truncated to fit inside a textarea.
+    """
+    source_dialog = (
+        DialogBuilder()
+        .callback_id('not_used')
+        .title('Source of message')
+        .text_area(
+            name='Message source',
+            label='This does not affect the original message',
+            value=source_text[:2999]
+        )
+    )
+    slack_web_client.dialog_open(
+        dialog=source_dialog.to_dict(),
+        trigger_id=trigger_id,
+    )
+
+
 def handle_slack_interaction(request: Request) -> Any:
     """Handles an interaction event request sent by Slack.
 
@@ -86,20 +111,10 @@ def handle_slack_interaction(request: Request) -> Any:
     # actions, so manually access the JSON fields
 
     # Show the source of the message in a dialog
-    source_dialog = (
-        DialogBuilder()
-        .callback_id('not_used')
-        .title('Source of message')
-        .text_area(
-            name='Message source',
-            label='This does not affect the original message',
-            value=json.dumps(payload['message'], indent=2, ensure_ascii=False)[:2999]
-        )
-    )
-    slack_web_client.dialog_open(
-        dialog=source_dialog.to_dict(),
-        trigger_id=payload['trigger_id'],
-    )
+    original_message = payload['message']
+    trigger_id = payload['trigger_id']
+    message_source = json.dumps(original_message, indent=2, ensure_ascii=False)
+    _show_source_dialog(trigger_id, message_source)
 
     return '', HTTPStatus.OK
 
