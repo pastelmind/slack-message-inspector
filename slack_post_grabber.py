@@ -31,12 +31,14 @@ def _is_valid_timestamp(timestamp: str) -> bool:
     """Checks if the given timestamp is at most five minutes from local time."""
     return abs(time() - int(timestamp)) <= 60 * 5
 
+
 def _is_valid_request_body(request_body: bytes, timestamp: str, signature: str) -> bool:
     """Verifies the contents of a Slack request against a signature."""
     signing_secret = os.environ['SLACK_SIGNING_SECRET']
     req = str.encode(f'v0:{timestamp}:') + request_body
-    request_hash = 'v0=' + hmac.new(str.encode(signing_secret), req, sha256).hexdigest()
-    return hmac.compare_digest(request_hash, signature)
+    request_hash = hmac.new(str.encode(signing_secret), req, sha256)
+    return hmac.compare_digest('v0=' + request_hash.hexdigest(), signature)
+
 
 def _is_valid_request(request: Request) -> bool:
     """Verifies the timestamp and signature of an incoming Slack request."""
@@ -113,9 +115,8 @@ def _show_source_dialog(trigger_id: str, source_text: str):
     else:
         segments = []
         while source_text and len(segments) < MAX_ELEMENTS:
-            current_segment, source_text = _split_upto_newline(source_text, MAX_LENGTH)
-            segments.append(current_segment)
-
+            segment, source_text = _split_upto_newline(source_text, MAX_LENGTH)
+            segments.append(segment)
         for i, text in enumerate(segments):
             source_dialog.text_area(
                 name=f'Message source ({i + 1} of {len(segments)})',
@@ -174,7 +175,9 @@ def handle_slack_interaction(request: Request) -> Any:
 
     if callback_id == 'view_message_source':
         # Show the source of the message in a dialog
-        message_source = json.dumps(original_message, indent=2, ensure_ascii=False)
+        message_source = json.dumps(
+            original_message, indent=2, ensure_ascii=False
+        )
         _show_source_dialog(trigger_id, message_source)
     elif callback_id == 'view_post_source':
         # Show the source of the Slack post attached to the message
@@ -184,13 +187,15 @@ def handle_slack_interaction(request: Request) -> Any:
             TOKEN = os.environ['SLACK_OAUTH_TOKEN']
             post_url = urllib.request.Request(
                 slack_post['url_private'],
-                headers={ 'Authorization': f'Bearer {TOKEN}' }
+                headers={'Authorization': f'Bearer {TOKEN}'}
             )
             post_response = urllib.request.urlopen(post_url)
             post_payload = json.loads(post_response.read())
             post_source = post_payload.get('full')
             if not post_source:
-                post_source = json.dumps(post_payload, indent=2, ensure_ascii=False)
+                post_source = json.dumps(
+                    post_payload, indent=2, ensure_ascii=False
+                )
             _show_source_dialog(trigger_id, post_source)
         else:
             slack_web_client.chat_postEphemeral(
