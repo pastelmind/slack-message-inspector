@@ -146,10 +146,6 @@ def handle_slack_interaction(request: Request) -> Any:
     payload_str = request.values['payload']
     payload = json.loads(payload_str)
 
-    # Our dialog is purely informational, so do nothing on submission
-    if payload['type'] == 'dialog_submission':
-        return '', HTTPStatus.OK
-
     assert payload['type'] == 'message_action', (
         f'Unexpected payload type received, see contents: {payload_str}'
     )
@@ -162,7 +158,7 @@ def handle_slack_interaction(request: Request) -> Any:
     response_url = payload['response_url']
 
     if callback_id == 'view_message_source':
-        # Show the source of the message in a dialog
+        # Show the source of the message in an ephemeral message
         message_source = json.dumps(
             original_message, indent=2, ensure_ascii=False
         )
