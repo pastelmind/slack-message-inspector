@@ -109,7 +109,7 @@ def _show_source_dialog(trigger_id: str, source_text: str):
     )
 
 
-def is_slack_post(file_info: dict) -> bool:
+def _is_slack_post(file_info: dict) -> bool:
     """Checks if the file type is a valid Slack post."""
     filetype = file_info['filetype']
     return filetype == 'post' or filetype == 'space' or filetype == 'docs'
@@ -159,7 +159,7 @@ def handle_slack_interaction(request: Request) -> Any:
     elif callback_id == 'view_post_source':
         # Show the source of the Slack post attached to the message
         attached_files = original_message.get('files', [])
-        slack_post = next(filter(is_slack_post, attached_files), None)
+        slack_post = next(filter(_is_slack_post, attached_files), None)
         if slack_post:
             TOKEN = os.environ['SLACK_OAUTH_TOKEN']
             post_url = urllib.request.Request(
