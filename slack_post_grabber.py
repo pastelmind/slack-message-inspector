@@ -8,7 +8,7 @@ from hashlib import sha256
 from http import HTTPStatus
 from sys import stderr
 from time import time
-from typing import Any
+from typing import Any, Tuple
 
 from slack import WebClient
 # from slack.web.classes.blocks import *
@@ -54,6 +54,35 @@ def _is_valid_request(request: Request) -> bool:
     return True
 
 
+def _split_upto_newline(source: str, maxlen: int) -> Tuple[str, str]:
+    """Splits a string in two, limiting the length of the first part.
+
+    Splits the given string in two, such that the first part (segment) contains
+    at most `maxlen` characters.
+
+    If the source string contains a line break ('\\n') at or before maxlen, the
+    string is split at the newline, and the newline character itself is not
+    included in either the source or maxlen. This ensures that source code is
+    split as cleanly as possible.
+
+    Args:
+        source: String to split.
+        maxlen: Maximum number of characters allowed in the segment part.
+
+    Returns:
+        Tuple of (segment, remainder). If the source text has less characters
+        than max_pos, the remainder contains the empty string ('').
+    """
+    assert maxlen >= 0, f'maxlen must be nonnegative (value={maxlen!r})'
+    split_current = split_next = maxlen
+    if len(source) > maxlen:
+        last_newline_pos = source.rfind('\n', 0, maxlen + 1)
+        if last_newline_pos != -1:
+            split_current = last_newline_pos
+            split_next = last_newline_pos + 1
+    return source[:split_current], source[split_next:]
+
+
 def _show_source_dialog(trigger_id: str, source_text: str):
     """Displays the source text in a Slack dialog.
 
@@ -84,16 +113,7 @@ def _show_source_dialog(trigger_id: str, source_text: str):
     else:
         segments = []
         while source_text and len(segments) < MAX_ELEMENTS:
-            split_current = split_next = min(len(source_text), MAX_LENGTH)
-            if len(source_text) > MAX_LENGTH:
-                last_newline_pos = source_text.rfind('\n', 0, MAX_LENGTH + 1)
-                # Split on the last newline before the MAX_LENGTH mark, unless
-                # this is the last segment
-                if last_newline_pos != -1 and len(segments) < MAX_ELEMENTS - 1:
-                    split_current = last_newline_pos
-                    split_next = last_newline_pos + 1
-            current_segment = source_text[:split_current]
-            source_text = source_text[split_next:]
+            current_segment, source_text = _split_upto_newline(source_text, MAX_LENGTH)
             segments.append(current_segment)
 
         for i, text in enumerate(segments):
