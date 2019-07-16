@@ -10,9 +10,6 @@ from time import time
 from typing import Any, Tuple
 
 from slack import WebClient
-# from slack.web.classes.blocks import *
-# from slack.web.classes.elements import *
-# from slack.web.classes.messages import Message
 from flask import Flask, Request
 from flask import request as current_request
 import requests
