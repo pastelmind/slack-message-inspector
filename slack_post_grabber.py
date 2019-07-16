@@ -3,7 +3,6 @@
 import hmac
 import json
 import os
-import urllib
 from hashlib import sha256
 from http import HTTPStatus
 from sys import stderr
@@ -174,12 +173,11 @@ def handle_slack_interaction(request: Request) -> Any:
         slack_post = next(filter(_is_slack_post, attached_files), None)
         if slack_post:
             TOKEN = os.environ['SLACK_OAUTH_TOKEN']
-            post_url = urllib.request.Request(
+            post_response = requests.get(
                 slack_post['url_private'],
                 headers={'Authorization': f'Bearer {TOKEN}'}
             )
-            post_response = urllib.request.urlopen(post_url)
-            post_payload = json.loads(post_response.read())
+            post_payload = post_response.json()
             post_source = post_payload.get('full')
             if not post_source:
                 post_source = json.dumps(
