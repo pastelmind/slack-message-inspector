@@ -109,6 +109,12 @@ def _show_source_dialog(trigger_id: str, source_text: str):
     )
 
 
+def is_slack_post(file_info: dict) -> bool:
+    """Checks if the file type is a valid Slack post."""
+    filetype = file_info['filetype']
+    return filetype == 'post' or filetype == 'space' or filetype == 'docs'
+
+
 def handle_slack_interaction(request: Request) -> Any:
     """Handles an interaction event request sent by Slack.
 
@@ -153,7 +159,6 @@ def handle_slack_interaction(request: Request) -> Any:
     elif callback_id == 'view_post_source':
         # Show the source of the Slack post attached to the message
         attached_files = original_message.get('files', [])
-        is_slack_post = lambda f: f['filetype'] == 'docs' or f['filetype'] == 'post'
         slack_post = next(filter(is_slack_post, attached_files), None)
         if slack_post:
             TOKEN = os.environ['SLACK_OAUTH_TOKEN']
@@ -163,7 +168,10 @@ def handle_slack_interaction(request: Request) -> Any:
             )
             post_response = urllib.request.urlopen(post_url)
             post_payload = json.loads(post_response.read())
-            _show_source_dialog(trigger_id, post_payload['full'])
+            post_source = post_payload.get('full')
+            if not post_source:
+                post_source = json.dumps(post_payload, indent=2, ensure_ascii=False)
+            _show_source_dialog(trigger_id, post_source)
         else:
             slack_web_client.chat_postEphemeral(
                 channel=payload['channel']['id'],
