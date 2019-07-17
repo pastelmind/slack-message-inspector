@@ -9,8 +9,7 @@ from sys import stderr
 from time import time
 from typing import Any, Tuple
 
-from flask import Flask, Request
-from flask import request as current_request
+import flask
 import requests
 
 
@@ -35,7 +34,7 @@ def _is_valid_request_body(request_body: bytes, timestamp: str, signature: str) 
     return hmac.compare_digest('v0=' + request_hash.hexdigest(), signature)
 
 
-def _is_valid_request(request: Request) -> bool:
+def _is_valid_request(request: flask.Request) -> bool:
     """Verifies the timestamp and signature of an incoming Slack request."""
     timestamp = request.headers.get('X-Slack-Request-Timestamp')
     if not _is_valid_timestamp(timestamp):
@@ -131,7 +130,7 @@ def _is_slack_post(file_info: dict) -> bool:
     return filetype == 'post' or filetype == 'space' or filetype == 'docs'
 
 
-def handle_slack_interaction(request: Request) -> Any:
+def on_request(request: flask.Request) -> Any:
     """Handles an interaction event request sent by Slack.
 
     Args:
@@ -196,11 +195,3 @@ def handle_slack_interaction(request: Request) -> Any:
         assert 0, f'Unexpected callback ID: {callback_id}'
 
     return '', HTTPStatus.OK
-
-
-slack_interaction_listener = Flask(__name__)
-slack_interaction_listener.add_url_rule(
-    '/',
-    view_func=lambda: handle_slack_interaction(current_request),
-    methods=['GET', 'POST']
-)
