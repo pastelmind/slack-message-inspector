@@ -126,8 +126,7 @@ def _send_source_message(response_url: str, heading: str, source: str) -> None:
 
 def _is_slack_post(file_info: dict) -> bool:
     """Checks if the file type is a valid Slack post."""
-    filetype = file_info['filetype']
-    return filetype == 'post' or filetype == 'space' or filetype == 'docs'
+    return file_info['filetype'] in ('post', 'space', 'docs')
 
 
 def on_request(request: flask.Request) -> Any:
