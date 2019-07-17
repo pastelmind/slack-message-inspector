@@ -91,7 +91,7 @@ def _send_response(response_url: str, text: str) -> None:
     requests.post(response_url, json=payload)
 
 
-def _send_source_message(response_url: str, source: str) -> None:
+def _send_source_message(response_url: str, heading: str, source: str) -> None:
     """Sends an ephemeral message containing the source of a message or post.
 
     If the source string is too long to fit in a single message, it will be
@@ -99,17 +99,18 @@ def _send_source_message(response_url: str, source: str) -> None:
 
     Args:
         response_url: URL provided by a Slack interaction request.
+        heading: Heading text displayed above the source text.
         source: Source text of a Slack message or post.
     """
     MAX_TEXT_LENGTH = 40000
 
-    boilerplate = 'Raw JSON of message:\n```{source}```'
+    boilerplate = f'{heading}:\n```{{source}}```'
     boilerplate_length = len(boilerplate.format(source=''))
     if len(source) <= MAX_TEXT_LENGTH - boilerplate_length:
         text = boilerplate.format(source=source)
         _send_response(response_url, text)
     else:
-        boilerplate = 'Raw JSON of message ({i} of {count}):\n```{source}```'
+        boilerplate = f'{heading} ({{i}} of {{count}}):\n```{{source}}```'
         boilerplate_length = len(boilerplate.format(i=0, count=0, source=''))
         segments = []
         while source and len(segments) < 5:
@@ -168,7 +169,8 @@ def handle_slack_interaction(request: Request) -> Any:
         message_source = json.dumps(
             original_message, indent=2, ensure_ascii=False
         )
-        _send_source_message(response_url, message_source)
+        _send_source_message(
+            response_url, 'Raw JSON of message', message_source)
     elif callback_id == 'view_post_source':
         # Show the source of the Slack post attached to the message
         attached_files = original_message.get('files', [])
@@ -185,7 +187,8 @@ def handle_slack_interaction(request: Request) -> Any:
                 post_source = json.dumps(
                     post_payload, indent=2, ensure_ascii=False
                 )
-            _send_source_message(response_url, post_source)
+            _send_source_message(
+                response_url, 'Raw source of post', post_source)
         else:
             _send_response(response_url, 'Error: Not a Slack post')
     else:
