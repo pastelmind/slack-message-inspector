@@ -14,6 +14,10 @@ from flask import request as current_request
 import requests
 
 
+TIMEOUT_POST_MESSAGE = float(os.getenv('TIMEOUT_POST_MESSAGE') or 3)
+TIMEOUT_GET_POST_SOURCE = float(os.getenv('TIMEOUT_GET_POST_SOURCE') or 3)
+
+
 # The following verification methods are based on:
 # - https://api.slack.com/docs/verifying-requests-from-slack#step-by-step_walk-through_for_validating_a_request
 # - https://github.com/slackapi/python-slack-events-api/blob/master/slackeventsapi/server.py
@@ -84,7 +88,7 @@ def _send_response(response_url: str, text: str) -> None:
         text: Text to send
     """
     payload = {'text': text, 'response_type': 'ephemeral'}
-    requests.post(response_url, json=payload)
+    requests.post(response_url, json=payload, timeout=TIMEOUT_POST_MESSAGE)
 
 
 def _send_source_message(response_url: str, heading: str, source: str) -> None:
@@ -175,7 +179,8 @@ def handle_slack_interaction(request: Request) -> Any:
             TOKEN = os.environ['SLACK_OAUTH_TOKEN']
             post_response = requests.get(
                 slack_post['url_private'],
-                headers={'Authorization': f'Bearer {TOKEN}'}
+                headers={'Authorization': f'Bearer {TOKEN}'},
+                timeout=TIMEOUT_GET_POST_SOURCE,
             )
             post_payload = post_response.json()
             post_source = post_payload.get('full')
