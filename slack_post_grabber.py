@@ -9,13 +9,9 @@ from sys import stderr
 from time import time
 from typing import Any, Tuple
 
-from slack import WebClient
 from flask import Flask, Request
 from flask import request as current_request
 import requests
-
-
-slack_web_client = WebClient(token=os.environ['SLACK_BOT_OAUTH_TOKEN'])
 
 
 # The following verification methods are based on:
