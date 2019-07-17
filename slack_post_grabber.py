@@ -80,6 +80,17 @@ def _split_upto_newline(source: str, maxlen: int) -> Tuple[str, str]:
     return source[:split_current], source[split_next:]
 
 
+def _send_response(response_url: str, text: str) -> None:
+    """Sends text in an ephemeral message to a response URL provided by Slack.
+
+    Args:
+        response_url: URL provided by a Slack interaction request.
+        text: Text to send
+    """
+    payload = {'text': text, 'response_type': 'ephemeral'}
+    requests.post(response_url, json=payload)
+
+
 def _send_source_message(response_url: str, source: str) -> None:
     """Sends an ephemeral message containing the source of a message or post.
 
@@ -96,8 +107,7 @@ def _send_source_message(response_url: str, source: str) -> None:
     boilerplate_length = len(boilerplate.format(source=''))
     if len(source) <= MAX_TEXT_LENGTH - boilerplate_length:
         text = boilerplate.format(source=source)
-        payload = {'text': text, 'response_type': 'ephemeral'}
-        requests.post(response_url, json=payload)
+        _send_response(response_url, text)
     else:
         boilerplate = 'Raw JSON of message ({i} of {count}):\n```{source}```'
         boilerplate_length = len(boilerplate.format(i=0, count=0, source=''))
@@ -111,8 +121,7 @@ def _send_source_message(response_url: str, source: str) -> None:
             text = boilerplate.format(
                 i=i + 1, count=len(segments), source=segment
             )
-            payload = {'text': text, 'response_type': 'ephemeral'}
-            requests.post(response_url, json=payload)
+            _send_response(response_url, text)
 
 
 def _is_slack_post(file_info: dict) -> bool:
@@ -178,7 +187,7 @@ def handle_slack_interaction(request: Request) -> Any:
                 )
             _send_source_message(response_url, post_source)
         else:
-            _send_source_message(response_url, 'Error: Not a Slack post')
+            _send_response(response_url, 'Error: Not a Slack post')
     else:
         assert 0, f'Unexpected callback ID: {callback_id}'
 
