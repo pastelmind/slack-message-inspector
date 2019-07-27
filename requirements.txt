@@ -3,7 +3,9 @@
 click==6.7
 Flask==1.0.2
 itsdangerous==0.24
-Jinja2==2.10
+# Update Jinja2 to handle CVE-2019-10906
+# See: https://nvd.nist.gov/vuln/detail/CVE-2019-10906
+Jinja2==2.10.1
 MarkupSafe==1.0
 pip==18.0
 requests==2.21.0
