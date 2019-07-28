@@ -6,7 +6,7 @@ import os
 from hashlib import sha256
 from http import HTTPStatus
 from sys import stderr
-from time import time
+from time import time, perf_counter
 from typing import Any, Dict, Tuple
 
 import flask
@@ -136,8 +136,14 @@ def _on_view_message_source(message: Dict[str, Any], response_url: str) -> None:
         message: The original message, parsed as JSON.
         response_url: URL provided by a Slack interaction request.
     """
+    counter_begin = perf_counter()
+
     source = json.dumps(message, indent=2, ensure_ascii=False)
     _send_source_message(response_url, 'Raw JSON of message', source)
+
+    time_spent = perf_counter() - counter_begin
+    print(f'view_message_source: Took {time_spent * 1000:.4f} ms')
+
 
 
 def _on_view_post_source(message: Dict[str, Any], response_url: str) -> None:
@@ -147,6 +153,8 @@ def _on_view_post_source(message: Dict[str, Any], response_url: str) -> None:
         message: The original message, parsed as JSON.
         response_url: URL provided by a Slack interaction request.
     """
+    counter_begin = perf_counter()
+
     attached_files = message.get('files', [])
     slack_post = next(filter(_is_slack_post, attached_files), None)
     if slack_post:
@@ -163,6 +171,9 @@ def _on_view_post_source(message: Dict[str, Any], response_url: str) -> None:
         _send_source_message(response_url, 'Raw source of post', source)
     else:
         _send_response(response_url, 'Error: Not a Slack post')
+
+    time_spent = perf_counter() - counter_begin
+    print(f'view_post_source: Took {time_spent * 1000:.4f} ms')
 
 
 def on_request(request: flask.Request) -> Any:
