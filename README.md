@@ -1,2 +1,3 @@
-# slack-post-grabber
-A slack app that shows the source of a Slack post
+# Slack Message Inspector
+
+A Slack app that shows the source of a Slack message or post.
