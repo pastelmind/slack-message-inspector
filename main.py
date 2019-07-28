@@ -7,7 +7,7 @@ from hashlib import sha256
 from http import HTTPStatus
 from sys import stderr
 from time import time
-from typing import Any, Tuple
+from typing import Any, Dict, Tuple
 
 import flask
 import requests
@@ -129,6 +129,42 @@ def _is_slack_post(file_info: dict) -> bool:
     return file_info['filetype'] in ('post', 'space', 'docs')
 
 
+def _on_view_message_source(message: Dict[str, Any], response_url: str) -> None:
+    """Responds to a view_message_source request.
+
+    Args:
+        message: The original message, parsed as JSON.
+        response_url: URL provided by a Slack interaction request.
+    """
+    source = json.dumps(message, indent=2, ensure_ascii=False)
+    _send_source_message(response_url, 'Raw JSON of message', source)
+
+
+def _on_view_post_source(message: Dict[str, Any], response_url: str) -> None:
+    """Responds to a view_post_source request.
+
+    Args:
+        message: The original message, parsed as JSON.
+        response_url: URL provided by a Slack interaction request.
+    """
+    attached_files = message.get('files', [])
+    slack_post = next(filter(_is_slack_post, attached_files), None)
+    if slack_post:
+        token = os.environ['SLACK_OAUTH_TOKEN']
+        response = requests.get(
+            slack_post['url_private'],
+            headers={'Authorization': f'Bearer {token}'},
+            timeout=TIMEOUT_GET_POST_SOURCE,
+        )
+        post_json = response.json()
+        source = post_json.get('full')
+        if not source:
+            source = json.dumps(post_json, indent=2, ensure_ascii=False)
+        _send_source_message(response_url, 'Raw source of post', source)
+    else:
+        _send_response(response_url, 'Error: Not a Slack post')
+
+
 def on_request(request: flask.Request) -> Any:
     """Handles an interaction event request sent by Slack.
 
@@ -163,33 +199,9 @@ def on_request(request: flask.Request) -> Any:
     response_url = payload['response_url']
 
     if callback_id == 'view_message_source':
-        # Show the source of the message in an ephemeral message
-        message_source = json.dumps(
-            original_message, indent=2, ensure_ascii=False
-        )
-        _send_source_message(
-            response_url, 'Raw JSON of message', message_source)
+        _on_view_message_source(original_message, response_url)
     elif callback_id == 'view_post_source':
-        # Show the source of the Slack post attached to the message
-        attached_files = original_message.get('files', [])
-        slack_post = next(filter(_is_slack_post, attached_files), None)
-        if slack_post:
-            TOKEN = os.environ['SLACK_OAUTH_TOKEN']
-            post_response = requests.get(
-                slack_post['url_private'],
-                headers={'Authorization': f'Bearer {TOKEN}'},
-                timeout=TIMEOUT_GET_POST_SOURCE,
-            )
-            post_payload = post_response.json()
-            post_source = post_payload.get('full')
-            if not post_source:
-                post_source = json.dumps(
-                    post_payload, indent=2, ensure_ascii=False
-                )
-            _send_source_message(
-                response_url, 'Raw source of post', post_source)
-        else:
-            _send_response(response_url, 'Error: Not a Slack post')
+        _on_view_post_source(original_message, response_url)
     else:
         assert 0, f'Unexpected callback ID: {callback_id}'
 
