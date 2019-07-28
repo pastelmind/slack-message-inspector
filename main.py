@@ -5,6 +5,7 @@ import json
 import os
 from hashlib import sha256
 from http import HTTPStatus
+from multiprocessing.dummy import Pool as ThreadPool
 from sys import stderr
 from time import time, perf_counter
 from typing import Any, Dict, Tuple
@@ -15,6 +16,10 @@ import requests
 
 TIMEOUT_POST_MESSAGE = float(os.getenv('TIMEOUT_POST_MESSAGE') or 3)
 TIMEOUT_GET_POST_SOURCE = float(os.getenv('TIMEOUT_GET_POST_SOURCE') or 3)
+THREADPOOL_THREAD_COUNT = int(os.getenv('THREADPOOL_THREAD_COUNT') or 4)
+
+
+_pool = ThreadPool(THREADPOOL_THREAD_COUNT)
 
 
 # The following verification methods are based on:
@@ -210,9 +215,11 @@ def on_request(request: flask.Request) -> Any:
     response_url = payload['response_url']
 
     if callback_id == 'view_message_source':
-        _on_view_message_source(original_message, response_url)
+        _pool.apply_async(func=_on_view_message_source,
+                          args=(original_message, response_url))
     elif callback_id == 'view_post_source':
-        _on_view_post_source(original_message, response_url)
+        _pool.apply_async(func=_on_view_post_source,
+                          args=(original_message, response_url))
     else:
         assert 0, f'Unexpected callback ID: {callback_id}'
 
