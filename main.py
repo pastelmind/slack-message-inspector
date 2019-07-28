@@ -10,11 +10,14 @@ from time import time, perf_counter
 from typing import Any, Dict, Tuple
 
 import flask
-import requests
+from requests import Session
 
 
 TIMEOUT_POST_MESSAGE = float(os.getenv('TIMEOUT_POST_MESSAGE') or 3)
 TIMEOUT_GET_POST_SOURCE = float(os.getenv('TIMEOUT_GET_POST_SOURCE') or 3)
+
+
+_session = Session()
 
 
 # The following verification methods are based on:
@@ -87,7 +90,7 @@ def _send_response(response_url: str, text: str) -> None:
         text: Text to send
     """
     payload = {'text': text, 'response_type': 'ephemeral'}
-    requests.post(response_url, json=payload, timeout=TIMEOUT_POST_MESSAGE)
+    _session.post(response_url, json=payload, timeout=TIMEOUT_POST_MESSAGE)
 
 
 def _send_source_message(response_url: str, heading: str, source: str) -> None:
@@ -159,7 +162,7 @@ def _on_view_post_source(message: Dict[str, Any], response_url: str) -> None:
     slack_post = next(filter(_is_slack_post, attached_files), None)
     if slack_post:
         token = os.environ['SLACK_OAUTH_TOKEN']
-        response = requests.get(
+        response = _session.get(
             slack_post['url_private'],
             headers={'Authorization': f'Bearer {token}'},
             timeout=TIMEOUT_GET_POST_SOURCE,
