@@ -6,6 +6,7 @@ import os
 from hashlib import sha256
 from http import HTTPStatus
 from sys import stderr
+from threading import Thread
 from time import time, perf_counter
 from typing import Any, Dict, Tuple
 
@@ -210,9 +211,13 @@ def on_request(request: flask.Request) -> Any:
     response_url = payload['response_url']
 
     if callback_id == 'view_message_source':
-        _on_view_message_source(original_message, response_url)
+        thread = Thread(target=_on_view_message_source,
+                        args=(original_message, response_url))
+        thread.start()
     elif callback_id == 'view_post_source':
-        _on_view_post_source(original_message, response_url)
+        thread = Thread(target=_on_view_post_source,
+                        args=(original_message, response_url))
+        thread.start()
     else:
         assert 0, f'Unexpected callback ID: {callback_id}'
 
